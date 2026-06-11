@@ -40,6 +40,19 @@
 \ jump past the next TODO; run again for the one after
 : next-todo  "TODO" find >p  p 0 < if "no TODO" msg else p 4 + cursor! then ;
 
+\ -- replace ------------------------------------------------------------
+
+\ replace every a with b from point onward, e.g.: "cat" "owl" replace-all
+\ (M-< first to do the whole buffer; one C-/ undoes the lot)
+: replace-all  >b >a  0 >n
+  a slen 0 > if
+    begin  a find >p  p 0 >= while
+      p cursor!  p  p a slen +  del  b insert
+      n 1 + >n
+    repeat
+  then
+  n >str " replaced" s+ msg ;
+
 \ -- buffer info --------------------------------------------------------
 
 : stats  len >str " bytes  " s+  lines >str s+  " lines" s+  msg ;

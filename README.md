@@ -111,7 +111,8 @@ already made remain as a single undo group, so `C-/` reverts them.
 At startup edy reads one optional file, `~/.edy.f`, in **definitions-only
 mode** — it can define words but nothing in it executes. A starter
 dictionary ships in this repo (`.edy.f`): line duplication, selection
-wrapping, a TODO jumper, buffer stats. `cp .edy.f ~/` and they're on `M-x`.
+wrapping, a TODO jumper, replace-all, buffer stats. `cp .edy.f ~/` and
+they're on `M-x`.
 
 ## Hardened I/O
 

@@ -1748,6 +1748,37 @@ mod tests {
     }
 
     #[test]
+    fn starter_dictionary_replace_all() {
+        let mut e = ed("cat dog cat dog cat");
+        let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/.edy.f")).unwrap();
+        e.vm.load(&src).unwrap();
+        keys(&mut e, &[Key::Meta('x')]);
+        typing(&mut e, "\"cat\" \"owl\" replace-all");
+        keys(&mut e, &[Key::Enter]);
+        assert_eq!(e.buf().text.all(), "owl dog owl dog owl");
+        assert_eq!(e.echo, "3 replaced");
+        keys(&mut e, &[Key::Ctrl('_')]);
+        assert_eq!(e.buf().text.all(), "cat dog cat dog cat");
+        keys(&mut e, &[Key::Meta('x')]);
+        typing(&mut e, "\"\" \"x\" replace-all");
+        keys(&mut e, &[Key::Enter]);
+        assert_eq!(e.echo, "0 replaced");
+        assert_eq!(e.buf().text.all(), "cat dog cat dog cat");
+    }
+
+    #[test]
+    fn replace_all_matches_at_position_zero_and_overlapping_replacement() {
+        let mut e = ed("aaa");
+        let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/.edy.f")).unwrap();
+        e.vm.load(&src).unwrap();
+        keys(&mut e, &[Key::Meta('x')]);
+        typing(&mut e, "\"a\" \"aa\" replace-all");
+        keys(&mut e, &[Key::Enter]);
+        assert_eq!(e.buf().text.all(), "aaaaaa");
+        assert_eq!(e.echo, "3 replaced");
+    }
+
+    #[test]
     fn vertical_goal_column() {
         let mut e = ed("long line here\nab\nanother long line");
         keys(&mut e, &[Key::Ctrl('e')]);
