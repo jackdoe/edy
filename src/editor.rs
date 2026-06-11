@@ -411,8 +411,11 @@ pub struct Editor {
     arg_digits: bool,
     last: Last,
     last_needle: String,
+    clip: Option<String>,
     pub vm: forth::Vm,
 }
+
+const CLIP_MAX: usize = 1_000_000;
 
 struct EvalCtx<'a> {
     buf: &'a mut Buffer,
@@ -598,8 +601,13 @@ impl Editor {
             arg_digits: false,
             last: Last::Other,
             last_needle: String::new(),
+            clip: None,
             vm: forth::Vm::new(),
         }
+    }
+
+    pub fn take_clip(&mut self) -> Option<String> {
+        self.clip.take()
     }
 
     pub fn eval_forth(&mut self, src: &str) {
@@ -927,6 +935,9 @@ impl Editor {
             self.kills.truncate(16);
         }
         self.kill_idx = 0;
+        if self.kills[0].len() <= CLIP_MAX {
+            self.clip = Some(self.kills[0].clone());
+        }
     }
 
     fn kill_line(&mut self, n: usize) {
@@ -1776,6 +1787,34 @@ mod tests {
         keys(&mut e, &[Key::Enter]);
         assert_eq!(e.buf().text.all(), "aaaaaa");
         assert_eq!(e.echo, "3 replaced");
+    }
+
+    #[test]
+    fn copy_and_kill_set_clipboard() {
+        let mut e = ed("hello world");
+        keys(&mut e, &[Key::Ctrl(' '), Key::Meta('f'), Key::Meta('w')]);
+        assert_eq!(e.take_clip().as_deref(), Some("hello"));
+        assert_eq!(e.take_clip(), None);
+        keys(&mut e, &[Key::Ctrl('a'), Key::Ctrl('k')]);
+        assert_eq!(e.take_clip().as_deref(), Some("hello world"));
+    }
+
+    #[test]
+    fn coalesced_kills_sync_whole_clipboard_entry() {
+        let mut e = ed("ab\ncd\n");
+        keys(&mut e, &[Key::Ctrl('k')]);
+        e.take_clip();
+        keys(&mut e, &[Key::Ctrl('k')]);
+        assert_eq!(e.take_clip().as_deref(), Some("ab\n"));
+    }
+
+    #[test]
+    fn yank_does_not_touch_clipboard() {
+        let mut e = ed("word");
+        keys(&mut e, &[Key::Ctrl('k')]);
+        e.take_clip();
+        keys(&mut e, &[Key::Ctrl('y')]);
+        assert_eq!(e.take_clip(), None);
     }
 
     #[test]

@@ -120,6 +120,28 @@ fn utf8(inp: &mut impl Input, first: u8) -> Option<char> {
     std::str::from_utf8(&buf[..len]).ok()?.chars().next()
 }
 
+pub fn osc52(out: &mut impl Write, s: &str) -> io::Result<()> {
+    out.write_all(b"\x1b]52;c;")?;
+    out.write_all(base64(s.as_bytes()).as_bytes())?;
+    out.write_all(b"\x07")
+}
+
+fn base64(data: &[u8]) -> String {
+    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
+    for c in data.chunks(3) {
+        let n = (c[0] as u32) << 16 | (*c.get(1).unwrap_or(&0) as u32) << 8 | *c.get(2).unwrap_or(&0) as u32;
+        for k in 0..4 {
+            if k <= c.len() {
+                out.push(T[(n >> (18 - 6 * k)) as usize & 63] as char);
+            } else {
+                out.push('=');
+            }
+        }
+    }
+    out
+}
+
 pub struct Raw {
     saved: sys::Termios,
 }
@@ -195,5 +217,24 @@ mod tests {
         assert_eq!(decode(b"\x1bOH"), Some(Key::Home));
         assert_eq!(decode("é".as_bytes()), Some(Key::Char('é')));
         assert_eq!(decode("語".as_bytes()), Some(Key::Char('語')));
+    }
+
+    #[test]
+    fn base64_vectors() {
+        assert_eq!(base64(b""), "");
+        assert_eq!(base64(b"f"), "Zg==");
+        assert_eq!(base64(b"fo"), "Zm8=");
+        assert_eq!(base64(b"foo"), "Zm9v");
+        assert_eq!(base64(b"foob"), "Zm9vYg==");
+        assert_eq!(base64(b"fooba"), "Zm9vYmE=");
+        assert_eq!(base64(b"foobar"), "Zm9vYmFy");
+        assert_eq!(base64(b"hello"), "aGVsbG8=");
+    }
+
+    #[test]
+    fn osc52_sequence() {
+        let mut out = Vec::new();
+        osc52(&mut out, "hello").unwrap();
+        assert_eq!(out, b"\x1b]52;c;aGVsbG8=\x07");
     }
 }

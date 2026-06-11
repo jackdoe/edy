@@ -61,6 +61,9 @@ fn main() {
                 ed.handle_key(key);
             }
         }
+        if let Some(s) = ed.take_clip() {
+            let _ = term::osc52(&mut out, &s);
+        }
     }
     drop(raw);
 }

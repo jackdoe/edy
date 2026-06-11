@@ -21,7 +21,9 @@ calls.
 - **Modern tty only.** UTF-8 and xterm CSI sequences assumed, never queried.
   No terminfo. Alternate screen, synchronized output (`?2026`) for flickerless
   full-frame paints, reverse video for the modeline and the active region —
-  and no other styling. No syntax highlighting, deliberately.
+  and no other styling. No syntax highlighting, deliberately. Copy and kill
+  also reach the OS clipboard via OSC 52 (write-only, explicit keystrokes
+  only, capped at 1MB) in any terminal that honors it.
 - **Forth, not lisp.** The extension language is a uxn-flavored partial
   Forth with named locals. No `here`, no `does>`, no memory model. The VM's
   entire universe is the current buffer: it has no I/O words at all.
