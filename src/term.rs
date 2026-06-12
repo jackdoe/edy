@@ -111,13 +111,17 @@ fn named(fin: u8, n: usize) -> Option<Key> {
 fn paste(inp: &mut impl Input) -> Option<Key> {
     let mut buf = Vec::new();
     loop {
-        buf.push(inp.byte()?);
         if buf.ends_with(b"\x1b[201~") {
             buf.truncate(buf.len() - 6);
-            let s = String::from_utf8_lossy(&buf);
-            return Some(Key::Paste(s.replace("\r\n", "\n").replace('\r', "\n")));
+            break;
         }
+        if !inp.pending() {
+            break;
+        }
+        buf.push(inp.byte()?);
     }
+    let s = String::from_utf8_lossy(&buf);
+    Some(Key::Paste(s.replace("\r\n", "\n").replace('\r', "\n")))
 }
 
 fn utf8(inp: &mut impl Input, first: u8) -> Option<char> {
@@ -241,6 +245,7 @@ mod tests {
         assert_eq!(decode(b"\x1b[200~a\r\nb\rc\nd\x1b[201~"), Some(Key::Paste("a\nb\nc\nd".into())));
         assert_eq!(decode(b"\x1b[200~\x1b[A\x0bx\x1b[201~"), Some(Key::Paste("\x1b[A\x0bx".into())));
         assert_eq!(decode(b"\x1b[200~\x1b[201~"), Some(Key::Paste("".into())));
+        assert_eq!(decode(b"\x1b[200~no terminator"), Some(Key::Paste("no terminator".into())));
     }
 
     #[test]
