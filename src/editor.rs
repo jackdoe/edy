@@ -791,10 +791,15 @@ impl Editor {
                 let end = b.text.next_boundary(b.cursor);
                 b.delete(b.cursor, end);
             }),
-            Cmd::DeleteBackward => self.repeat(n, |b| {
-                let start = b.text.prev_boundary(b.cursor);
-                b.delete(start, b.cursor);
-            }),
+            Cmd::DeleteBackward => match self.buf().selection() {
+                Some((a, z)) => {
+                    self.buf_mut().delete(a, z);
+                }
+                None => self.repeat(n, |b| {
+                    let start = b.text.prev_boundary(b.cursor);
+                    b.delete(start, b.cursor);
+                }),
+            },
             Cmd::KillLine => self.kill_line(n),
             Cmd::KillWordForward => self.kill_words(n, true),
             Cmd::KillWordBackward => self.kill_words(n, false),
@@ -1608,6 +1613,16 @@ mod tests {
         assert!(e.buf().mark.is_some());
         keys(&mut e, &[Key::Ctrl('x'), Key::Ctrl('x')]);
         assert!(e.buf().mark_active);
+    }
+
+    #[test]
+    fn backspace_deletes_selection() {
+        let mut e = ed("abcdef");
+        keys(&mut e, &[Key::Ctrl(' '), Key::Ctrl('f'), Key::Ctrl('f'), Key::Ctrl('f'), Key::Backspace]);
+        assert_eq!(e.buf().text.all(), "def");
+        assert_eq!(e.buf().cursor, 0);
+        keys(&mut e, &[Key::Ctrl('f'), Key::Backspace]);
+        assert_eq!(e.buf().text.all(), "ef");
     }
 
     #[test]

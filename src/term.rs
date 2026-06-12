@@ -42,9 +42,9 @@ impl Input for Tty {
 pub fn read_key(inp: &mut impl Input) -> Option<Key> {
     let b = inp.byte()?;
     match b {
-        0x0d => Some(Key::Enter),
+        0x0d | 0x0a => Some(Key::Enter),
         0x09 => Some(Key::Tab),
-        0x7f => Some(Key::Backspace),
+        0x7f | 0x08 => Some(Key::Backspace),
         0x1b => escape(inp),
         0x00 => Some(Key::Ctrl(' ')),
         0x01..=0x1a => Some(Key::Ctrl((b + 0x60) as char)),
@@ -205,7 +205,9 @@ mod tests {
         assert_eq!(decode(&[0x00]), Some(Key::Ctrl(' ')));
         assert_eq!(decode(&[0x1f]), Some(Key::Ctrl('_')));
         assert_eq!(decode(&[0x0d]), Some(Key::Enter));
+        assert_eq!(decode(&[0x0a]), Some(Key::Enter));
         assert_eq!(decode(&[0x7f]), Some(Key::Backspace));
+        assert_eq!(decode(&[0x08]), Some(Key::Backspace));
         assert_eq!(decode(&[0x1b]), Some(Key::Esc));
         assert_eq!(decode(b"\x1bf"), Some(Key::Meta('f')));
         assert_eq!(decode(b"\x1b<"), Some(Key::Meta('<')));
