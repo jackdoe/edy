@@ -57,8 +57,14 @@ fn main() {
         ed.reframe();
         let _ = ui::render(&ed, &mut out);
         if sys::wait_input(250) {
-            if let Some(key) = term::read_key(&mut tty) {
-                ed.handle_key(key);
+            loop {
+                match term::read_key(&mut tty) {
+                    Some(key) => ed.handle_key(key),
+                    None => break,
+                }
+                if ed.quit || !sys::wait_input(0) {
+                    break;
+                }
             }
         }
         if let Some(s) = ed.take_clip() {

@@ -290,7 +290,7 @@ pub enum Cmd {
     EvalPoint,
 }
 
-pub fn keymap(cx: bool, key: Key) -> Option<Cmd> {
+pub fn keymap(cx: bool, key: &Key) -> Option<Cmd> {
     if cx {
         return match key {
             Key::Ctrl('s') => Some(Cmd::Save),
@@ -305,7 +305,7 @@ pub fn keymap(cx: bool, key: Key) -> Option<Cmd> {
         };
     }
     match key {
-        Key::Char(c) => Some(Cmd::Insert(c)),
+        Key::Char(c) => Some(Cmd::Insert(*c)),
         Key::Enter => Some(Cmd::Newline),
         Key::Tab => Some(Cmd::Insert('\t')),
         Key::Ctrl('f') | Key::Right => Some(Cmd::Forward),
@@ -689,11 +689,44 @@ impl Editor {
 
     pub fn handle_key(&mut self, key: Key) {
         self.echo.clear();
+        let key = match key {
+            Key::Paste(s) => return self.paste(s),
+            k => k,
+        };
         match std::mem::replace(&mut self.mode, Mode::Edit) {
             Mode::Edit => self.edit_key(key),
             Mode::Prompt(p) => self.prompt_key(p, key),
             Mode::Search(s) => self.search_key(s, key),
             Mode::Replace(r) => self.replace_key(r, key),
+        }
+    }
+
+    fn paste(&mut self, s: String) {
+        match std::mem::replace(&mut self.mode, Mode::Edit) {
+            Mode::Edit => {
+                let b = self.buf_mut();
+                b.new_group();
+                b.break_undo_chain();
+                let at = b.cursor;
+                b.insert(at, &s);
+                b.cursor = at + s.len();
+                b.goal = None;
+                self.last = Last::Other;
+            }
+            Mode::Prompt(mut p) => {
+                if !p.yes_no {
+                    p.matches.clear();
+                    p.input.insert_str(p.cur, &s);
+                    p.cur += s.len();
+                }
+                self.mode = Mode::Prompt(p);
+            }
+            Mode::Search(mut se) => {
+                se.needle.push_str(&s);
+                self.search_move(&mut se, false);
+                self.mode = Mode::Search(se);
+            }
+            Mode::Replace(r) => self.mode = Mode::Replace(r),
         }
     }
 
@@ -722,7 +755,7 @@ impl Editor {
                 self.arg_digits = false;
                 return;
             }
-            if let (Some(n), Key::Char(c @ '0'..='9')) = (self.arg, key) {
+            if let (Some(n), &Key::Char(c @ '0'..='9')) = (self.arg, &key) {
                 let d = c as usize - '0' as usize;
                 self.arg = Some(if self.arg_digits { n.saturating_mul(10) + d } else { d });
                 self.arg_digits = true;
@@ -738,7 +771,7 @@ impl Editor {
             }
         }
         let cx = std::mem::take(&mut self.cx);
-        match keymap(cx, key) {
+        match keymap(cx, &key) {
             Some(cmd) => self.run(cmd),
             None => {
                 self.arg = None;
@@ -1396,8 +1429,8 @@ mod tests {
     }
 
     fn keys(e: &mut Editor, ks: &[Key]) {
-        for &k in ks {
-            e.handle_key(k);
+        for k in ks {
+            e.handle_key(k.clone());
         }
     }
 
@@ -1830,6 +1863,31 @@ mod tests {
         e.take_clip();
         keys(&mut e, &[Key::Ctrl('y')]);
         assert_eq!(e.take_clip(), None);
+    }
+
+    #[test]
+    fn paste_inserts_literally_as_one_undo_group() {
+        let mut e = ed("");
+        typing(&mut e, "x");
+        e.handle_key(Key::Paste("a\nb\x0bc".into()));
+        assert_eq!(e.buf().text.all(), "xa\nb\x0bc");
+        assert_eq!(e.buf().cursor, 6);
+        keys(&mut e, &[Key::Ctrl('_')]);
+        assert_eq!(e.buf().text.all(), "x");
+        assert_eq!(e.buf().cursor, 1);
+    }
+
+    #[test]
+    fn paste_into_search_and_prompt() {
+        let mut e = ed("alpha beta");
+        keys(&mut e, &[Key::Ctrl('s')]);
+        e.handle_key(Key::Paste("beta".into()));
+        assert_eq!(e.buf().cursor, 10);
+        keys(&mut e, &[Key::Enter]);
+        keys(&mut e, &[Key::Meta('x')]);
+        e.handle_key(Key::Paste("1 2 +".into()));
+        keys(&mut e, &[Key::Enter]);
+        assert_eq!(e.echo, "ok ( 3 )");
     }
 
     #[test]

@@ -1,9 +1,10 @@
 use crate::sys;
 use std::io::{self, Write};
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Key {
     Char(char),
+    Paste(String),
     Ctrl(char),
     Meta(char),
     MetaBackspace,
@@ -80,6 +81,7 @@ fn csi(inp: &mut impl Input) -> Option<Key> {
                 first.get_or_insert(cur);
                 cur = 0;
             }
+            b'~' if first.unwrap_or(cur) == 200 => return paste(inp),
             0x40..=0x7e => return named(b, first.unwrap_or(cur)),
             _ => return None,
         }
@@ -103,6 +105,18 @@ fn named(fin: u8, n: usize) -> Option<Key> {
             _ => None,
         },
         _ => None,
+    }
+}
+
+fn paste(inp: &mut impl Input) -> Option<Key> {
+    let mut buf = Vec::new();
+    loop {
+        buf.push(inp.byte()?);
+        if buf.ends_with(b"\x1b[201~") {
+            buf.truncate(buf.len() - 6);
+            let s = String::from_utf8_lossy(&buf);
+            return Some(Key::Paste(s.replace("\r\n", "\n").replace('\r', "\n")));
+        }
     }
 }
 
@@ -153,7 +167,7 @@ impl Raw {
         sys::make_raw(&mut t);
         sys::termios_set(&t)?;
         let mut out = io::stdout();
-        out.write_all(b"\x1b[?1049h")?;
+        out.write_all(b"\x1b[?1049h\x1b[?2004h")?;
         out.flush()?;
         Ok(Raw { saved })
     }
@@ -171,7 +185,7 @@ impl Drop for Raw {
 
 pub fn restore(t: &sys::Termios) {
     let mut out = io::stdout();
-    let _ = out.write_all(b"\x1b[?2026l\x1b[?25h\x1b[?1049l");
+    let _ = out.write_all(b"\x1b[?2004l\x1b[?2026l\x1b[?25h\x1b[?1049l");
     let _ = out.flush();
     let _ = sys::termios_set(t);
 }
@@ -219,6 +233,14 @@ mod tests {
         assert_eq!(decode(b"\x1bOH"), Some(Key::Home));
         assert_eq!(decode("é".as_bytes()), Some(Key::Char('é')));
         assert_eq!(decode("語".as_bytes()), Some(Key::Char('語')));
+    }
+
+    #[test]
+    fn bracketed_paste() {
+        assert_eq!(decode(b"\x1b[200~hello\x1b[201~"), Some(Key::Paste("hello".into())));
+        assert_eq!(decode(b"\x1b[200~a\r\nb\rc\nd\x1b[201~"), Some(Key::Paste("a\nb\nc\nd".into())));
+        assert_eq!(decode(b"\x1b[200~\x1b[A\x0bx\x1b[201~"), Some(Key::Paste("\x1b[A\x0bx".into())));
+        assert_eq!(decode(b"\x1b[200~\x1b[201~"), Some(Key::Paste("".into())));
     }
 
     #[test]
