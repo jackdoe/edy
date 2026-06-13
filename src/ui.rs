@@ -75,18 +75,7 @@ fn draw_line(f: &mut String, s: &str, left: usize, cols: usize, sel: Option<(usi
                 f.push_str(if want { "\x1b[7m" } else { "\x1b[m" });
                 rev = want;
             }
-            match c {
-                '\t' => {
-                    for _ in 0..w {
-                        f.push(' ');
-                    }
-                }
-                c if (c as u32) < 0x20 => {
-                    f.push('^');
-                    f.push((c as u8 + 0x40) as char);
-                }
-                _ => f.push(c),
-            }
+            emit(f, c, w);
             vw += w;
         } else if col + w > left {
             for _ in 0..col + w - left {
@@ -111,6 +100,21 @@ fn draw_line(f: &mut String, s: &str, left: usize, cols: usize, sel: Option<(usi
     }
 }
 
+fn emit(f: &mut String, c: char, w: usize) {
+    match c as u32 {
+        0x09 => f.extend(std::iter::repeat_n(' ', w)),
+        u @ (0x00..=0x1f | 0x7f) => {
+            f.push('^');
+            f.push((u as u8 ^ 0x40) as char);
+        }
+        u @ (0x80..=0x9f) => {
+            f.push_str("M-^");
+            f.push((u as u8 & 0x7f ^ 0x40) as char);
+        }
+        _ => f.push(c),
+    }
+}
+
 fn clip(s: &str, cols: usize) -> (String, usize) {
     let mut out = String::new();
     let mut w = 0;
@@ -119,7 +123,7 @@ fn clip(s: &str, cols: usize) -> (String, usize) {
         if w + cw > cols {
             break;
         }
-        out.push(c);
+        emit(&mut out, c, cw);
         w += cw;
     }
     (out, w)
@@ -239,6 +243,20 @@ mod tests {
     #[test]
     fn control_chars_caret() {
         assert_eq!(drawn("a\u{1}b", 0, 10), "a^Ab");
+        assert_eq!(drawn("a\u{0}b", 0, 10), "a^@b");
+        assert_eq!(drawn("a\u{7f}b", 0, 10), "a^?b");
+    }
+
+    #[test]
+    fn c1_controls_escaped() {
+        assert_eq!(drawn("a\u{9b}b", 0, 10), "aM-^[b");
+        assert_eq!(drawn("a\u{80}b", 0, 10), "aM-^@b");
+        assert_eq!(drawn("a\u{9f}b", 0, 10), "aM-^_b");
+    }
+
+    #[test]
+    fn clip_escapes_controls() {
+        assert_eq!(clip("a\u{9b}[31mb", 20).0, "aM-^[[31mb");
     }
 
     #[test]

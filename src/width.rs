@@ -48,9 +48,10 @@ pub fn char_width(c: char) -> usize {
 }
 
 pub fn step(c: char, col: usize) -> usize {
-    match c {
-        '\t' => 8 - col % 8,
-        c if (c as u32) < 0x20 => 2,
+    match c as u32 {
+        0x09 => 8 - col % 8,
+        0x00..=0x1f | 0x7f => 2,
+        0x80..=0x9f => 4,
         _ => char_width(c),
     }
 }
@@ -89,6 +90,8 @@ mod tests {
         assert_eq!(str_width("a語b"), 4);
         assert_eq!(str_width("\tx"), 9);
         assert_eq!(str_width("ab\tx"), 9);
+        assert_eq!(step('\u{7f}', 0), 2);
+        assert_eq!(step('\u{9b}', 0), 4);
     }
 
     #[test]
