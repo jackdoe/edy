@@ -7,7 +7,7 @@ mod text;
 mod ui;
 mod width;
 
-use std::io;
+use std::io::{self, Write};
 use std::path::Path;
 use std::sync::OnceLock;
 
@@ -50,12 +50,21 @@ fn main() {
 
     let mut out = io::BufWriter::new(io::stdout());
     let mut tty = term::Tty;
+    let mut size = (0, 0);
+    let mut dirty = true;
     while !ed.quit {
-        let (rows, cols) = sys::winsize();
-        ed.rows = rows;
-        ed.cols = cols;
-        ed.reframe();
-        let _ = ui::render(&ed, &mut out);
+        let ws = sys::winsize();
+        if ws != size {
+            size = ws;
+            ed.rows = ws.0;
+            ed.cols = ws.1;
+            dirty = true;
+        }
+        if dirty {
+            ed.reframe();
+            let _ = ui::render(&ed, &mut out);
+            dirty = false;
+        }
         if sys::wait_input(250) {
             loop {
                 match term::read_key(&mut tty) {
@@ -66,9 +75,11 @@ fn main() {
                     break;
                 }
             }
+            dirty = true;
         }
         if let Some(s) = ed.take_clip() {
             let _ = term::osc52(&mut out, &s);
+            let _ = out.flush();
         }
     }
     drop(raw);
