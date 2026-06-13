@@ -111,11 +111,10 @@ fn named(fin: u8, n: usize) -> Option<Key> {
 fn paste(inp: &mut impl Input) -> Option<Key> {
     let mut buf = Vec::new();
     loop {
-        if buf.ends_with(b"\x1b[201~") {
-            buf.truncate(buf.len() - 6);
-            break;
-        }
         if !inp.pending() {
+            if buf.ends_with(b"\x1b[201~") {
+                buf.truncate(buf.len() - 6);
+            }
             break;
         }
         buf.push(inp.byte()?);
@@ -246,6 +245,10 @@ mod tests {
         assert_eq!(decode(b"\x1b[200~\x1b[A\x0bx\x1b[201~"), Some(Key::Paste("\x1b[A\x0bx".into())));
         assert_eq!(decode(b"\x1b[200~\x1b[201~"), Some(Key::Paste("".into())));
         assert_eq!(decode(b"\x1b[200~no terminator"), Some(Key::Paste("no terminator".into())));
+        assert_eq!(
+            decode(b"\x1b[200~before\x1b[201~\x18\x13rm\x1b[201~"),
+            Some(Key::Paste("before\x1b[201~\x18\x13rm".into()))
+        );
     }
 
     #[test]
